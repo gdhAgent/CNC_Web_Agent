@@ -1,0 +1,21 @@
+/* 全局基础样式（Element Plus 负责组件样式，这里只做 reset + 布局变量） */
+:root {
+  font-size: 14px;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+#app {
+  height: 100vh;
+  overflow: hidden;
+}
