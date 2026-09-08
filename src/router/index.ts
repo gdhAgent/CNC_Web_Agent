@@ -74,6 +74,18 @@ const router = createRouter({
       meta: { title: '基础数据', requiresAuth: true, pageCode: 'base-data' },
     },
     {
+      path: '/admin/llm-config',
+      name: 'llm-config',
+      component: () => import('@/views/LlmConfigView.vue'),
+      meta: { title: '模型配置', requiresAuth: true, pageCode: 'llm-config' },
+    },
+    {
+      path: '/admin/term-dict',
+      name: 'term-dict',
+      component: () => import('@/views/TermDictView.vue'),
+      meta: { title: '术语词典', requiresAuth: true, pageCode: 'term-dict' },
+    },
+    {
       path: '/vectors',
       name: 'vectors',
       component: () => import('@/views/VectorView.vue'),

@@ -77,6 +77,12 @@ function openTrace(row: LogItem) {
   router.push(`/trace/${row.trace_id}`)
 }
 
+function modelLabel(row: LogItem, kind: 'chat' | 'embed' | 'rerank'): string {
+  const name = kind === 'chat' ? row.chat_provider_name : kind === 'embed' ? row.embed_provider_name : row.rerank_provider_name
+  const mdl = kind === 'chat' ? row.chat_model : kind === 'embed' ? row.embed_model : row.rerank_model
+  return `${kind}: ${name ?? '—'} / ${mdl ?? '—'}`
+}
+
 function fmtDate(s?: string | null): string {
   if (!s) return '—'
   return new Date(s).toLocaleString('zh-CN', {
@@ -165,6 +171,25 @@ onMounted(loadList)
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="模型" width="240" show-overflow-tooltip>
+          <template #default="{ row }">
+            <div class="model-stack">
+              <div v-if="row.chat_provider_name || row.chat_model" class="model-cell" :title="modelLabel(row, 'chat')">
+                <el-tag size="small" type="success" effect="plain">chat</el-tag>
+                <span class="model-name">{{ row.chat_provider_name ?? '—' }} / {{ row.chat_model ?? '—' }}</span>
+              </div>
+              <div v-if="row.embed_provider_name || row.embed_model" class="model-cell" :title="modelLabel(row, 'embed')">
+                <el-tag size="small" type="primary" effect="plain">embed</el-tag>
+                <span class="model-name">{{ row.embed_provider_name ?? '—' }} / {{ row.embed_model ?? '—' }}</span>
+              </div>
+              <div v-if="row.rerank_provider_name || row.rerank_model" class="model-cell" :title="modelLabel(row, 'rerank')">
+                <el-tag size="small" type="warning" effect="plain">rerank</el-tag>
+                <span class="model-name">{{ row.rerank_provider_name ?? '—' }} / {{ row.rerank_model ?? '—' }}</span>
+              </div>
+              <div v-if="!row.chat_provider_name && !row.chat_model && !row.embed_provider_name && !row.embed_model && !row.rerank_provider_name && !row.rerank_model" style="color: #ccc">—</div>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column label="耗时" width="90">
           <template #default="{ row }">
             <span v-if="row.latency_ms != null">{{ row.latency_ms }}ms</span>
@@ -236,5 +261,27 @@ onMounted(loadList)
   margin-top: 14px;
   justify-content: flex-end;
   display: flex;
+}
+
+.model-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.model-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+.model-name {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  color: var(--el-text-color-regular);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

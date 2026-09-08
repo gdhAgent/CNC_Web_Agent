@@ -20,6 +20,8 @@ const NAV_ITEMS = [
   { path: '/dashboard', pageCode: 'dashboard', label: '故障看板' },
   { path: '/vectors', pageCode: 'vectors', label: '向量总览' },
   { path: '/admin/base-data', pageCode: 'base-data', label: '基础数据' },
+  { path: '/admin/llm-config', pageCode: 'llm-config', label: '模型配置' },
+  { path: '/admin/term-dict', pageCode: 'term-dict', label: '术语词典' },
 ]
 
 const visibleNav = computed(() => NAV_ITEMS.filter((it) => auth.canSeePage(it.pageCode)))

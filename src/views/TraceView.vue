@@ -129,15 +129,34 @@ const stepTech: Record<string, string> = {
   rrf_fusion: 'RRF 融合算法',
   rerank: 'bge-reranker-v2-m3',
   threshold_gate: '阈值 ≥ 0.30',
-  llm_generate: 'DeepSeek deepseek-chat',
   post_check: '引用越界校验',
 }
+
+// LLM / Embedding / Rerank 节点用 trace 自带的字段显示实际调用的供应商+模型。
+function techFor(kind: 'chat' | 'embed' | 'rerank'): string {
+  if (!trace.value) return '—'
+  const p = (kind === 'chat' ? trace.value.chat_provider_name
+    : kind === 'embed' ? trace.value.embed_provider_name
+    : trace.value.rerank_provider_name)?.trim()
+  const m = (kind === 'chat' ? trace.value.chat_model
+    : kind === 'embed' ? trace.value.embed_model
+    : trace.value.rerank_model)?.trim()
+  if (p && m) return `${p} · ${m}`
+  return m || p || '—'
+}
+
+function llmTech(): string { return techFor('chat') }
+function embedTech(): string { return techFor('embed') }
+function rerankTech(): string { return techFor('rerank') }
 
 function techOf(s: TraceStepItem): string {
   if (s.step === 'tool_call') {
     const name = (s.input as Record<string, unknown> | undefined)?.name
     return typeof name === 'string' && name ? `工具：${name}` : ''
   }
+  if (s.step === 'llm_generate') return llmTech()
+  if (s.step === 'embed') return embedTech()
+  if (s.step === 'rerank') return rerankTech()
   return stepTech[s.step] ?? ''
 }
 
@@ -195,6 +214,27 @@ onMounted(load)
           <span>· 工具 {{ summary?.toolCount }} 次</span>
           <span v-if="trace.detected_codes.length">
             · 识别码 {{ trace.detected_codes.join(', ') }}
+          </span>
+          <span v-if="trace.chat_provider_name || trace.chat_model" class="meta-model">
+            · chat
+            <el-tag v-if="trace.chat_provider_name" size="small" type="success" effect="plain">
+              {{ trace.chat_provider_name }}
+            </el-tag>
+            <span v-if="trace.chat_model" class="model-name">{{ trace.chat_model }}</span>
+          </span>
+          <span v-if="trace.embed_provider_name || trace.embed_model" class="meta-model">
+            · embed
+            <el-tag v-if="trace.embed_provider_name" size="small" type="primary" effect="plain">
+              {{ trace.embed_provider_name }}
+            </el-tag>
+            <span v-if="trace.embed_model" class="model-name">{{ trace.embed_model }}</span>
+          </span>
+          <span v-if="trace.rerank_provider_name || trace.rerank_model" class="meta-model">
+            · rerank
+            <el-tag v-if="trace.rerank_provider_name" size="small" type="warning" effect="plain">
+              {{ trace.rerank_provider_name }}
+            </el-tag>
+            <span v-if="trace.rerank_model" class="model-name">{{ trace.rerank_model }}</span>
           </span>
           <span v-if="trace.feedback">· 评价 {{ trace.feedback === 1 ? '👍' : '👎' }}</span>
         </div>
@@ -506,5 +546,15 @@ onMounted(load)
 .improved {
   color: var(--el-color-success);
   font-weight: 700;
+}
+
+.meta-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.model-name {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 12px;
 }
 </style>

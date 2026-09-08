@@ -151,6 +151,12 @@ export interface TraceResponse {
   tool_calls: ToolCallInfo[]
   feedback?: number | null
   created_at?: string | null
+  chat_provider_name?: string | null   // 本次实际调用的 chat 供应商（agent 路由有值；纯 RAG 为 null）
+  chat_model?: string | null           // 本次实际调用的 chat 模型
+  embed_provider_name?: string | null  // embedding 供应商（retrieve_knowledge 工具调用过才非空）
+  embed_model?: string | null
+  rerank_provider_name?: string | null // rerank 供应商（rerank 步骤执行过才非空）
+  rerank_model?: string | null
   steps: TraceStepItem[]               // 时间轴
   ranking_comparison: RankingRow[]     // 三路排名对比表
 }
@@ -165,6 +171,12 @@ export interface LogItem {
   latency_ms?: number | null
   user_code?: string | null
   created_at?: string | null
+  chat_provider_name?: string | null
+  chat_model?: string | null
+  embed_provider_name?: string | null
+  embed_model?: string | null
+  rerank_provider_name?: string | null
+  rerank_model?: string | null
 }
 
 export interface LogListResponse {
@@ -475,4 +487,89 @@ export interface EntryListResponse {
   items: EntryListItem[]
   limit: number
   offset: number
+}
+
+// ==================== 模型配置（chat LLM 供应商） ====================
+
+export interface LlmProviderItem {
+  id: number
+  name: string
+  base_url: string
+  api_key: string
+  model: string
+  disable_thinking: boolean
+  is_active: boolean
+  created_at?: string | null
+  updated_at?: string | null
+  created_by?: string | null
+  updated_by?: string | null
+}
+
+export interface LlmTestResponse {
+  ok: boolean
+  message?: string | null
+  latency_ms: number
+}
+
+export interface LlmTestRequest {
+  base_url: string
+  api_key: string
+  model: string
+}
+
+// ==================== 模型配置（Embedding 供应商） ====================
+
+export interface EmbeddingProviderItem {
+  id: number
+  name: string
+  base_url: string
+  api_key: string
+  model: string
+  dim: number                              // 输出向量维度；当前 DB 列固定 1024，需切换维度走离线迁移
+  is_active: boolean
+  created_at?: string | null
+  updated_at?: string | null
+  created_by?: string | null
+  updated_by?: string | null
+}
+
+export interface EmbeddingTestRequest {
+  base_url: string
+  api_key: string
+  model: string
+  dim: number
+}
+
+export interface EmbeddingTestResponse {
+  ok: boolean
+  message?: string | null
+  got_dim?: number | null                  // 实际返回的维度
+  latency_ms: number
+}
+
+// ==================== 模型配置（Rerank 供应商） ====================
+
+export interface RerankProviderItem {
+  id: number
+  name: string
+  base_url: string
+  api_key: string
+  model: string
+  is_active: boolean
+  created_at?: string | null
+  updated_at?: string | null
+  created_by?: string | null
+  updated_by?: string | null
+}
+
+export interface RerankTestRequest {
+  base_url: string
+  api_key: string
+  model: string
+}
+
+export interface RerankTestResponse {
+  ok: boolean
+  message?: string | null
+  latency_ms: number
 }

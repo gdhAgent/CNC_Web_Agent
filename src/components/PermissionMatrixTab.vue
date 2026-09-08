@@ -44,6 +44,7 @@ const ACTION_LABELS: Record<string, string> = {
   'base_items.edit': '维护字典 / 设备',
   'users.manage': '用户管理',
   'permissions.manage': '权限矩阵',
+  'providers.manage': '管理模型供应商',
 }
 
 /** 动作码 → 中文（未命中回退码本身） */
@@ -70,6 +71,7 @@ const PAGE_DEFS: Array<{ page_code: string; label: string; actionOptions: string
   { page_code: 'workorders', label: '工单管理', actionOptions: ['view', 'workorders.create', 'workorders.edit', 'workorders.delete'] },
   { page_code: 'vectors', label: '向量总览', actionOptions: ['view', 'vectors.vectorize'] },
   { page_code: 'base-data', label: '基础数据', actionOptions: ['view', 'base_items.edit', 'users.manage', 'permissions.manage'] },
+  { page_code: 'llm-config', label: '模型配置', actionOptions: ['view', 'providers.manage'] },
 ]
 
 interface RowState {

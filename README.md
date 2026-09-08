@@ -24,7 +24,9 @@
 | `/base-data` | **BaseDataView** | 基础数据维护（品牌 / 类别 / 严重度 / 故障类型） |
 | `/vectors` | **VectorView** | 向量库总览（维度统计 / 未向量化 / 可视化） |
 | `/dashboard` | **DashboardView** | 高频故障 Top-N 看板 |
-| `/query-logs` | **QueryLogView** | 查询日志 / 检索过程浏览 |
+| `/query-logs` | **QueryLogView** | 查询日志 / 检索过程浏览（记录实际调用的 chat / embed / rerank 供应商） |
+| `/admin/llm-config` | **LlmConfigView** | 模型 / 服务配置：管理 chat / embedding / rerank 三类供应商（主用热切换） |
+| `/admin/term-dict` | **TermDictView** | 工业术语词典：CRUD + 从查询日志 / 报警码自动挖掘候选词（影响 SimpleTokenizer 分词） |
 
 管理功能（用户、角色权限矩阵等）以组件形式内嵌于相应视图。
 
@@ -68,8 +70,11 @@ CNC_Web_Agent/
 │  ├─ components/     QueryBar / RetrievalPanel / AnalysisPanel / CitationRef /
 │  │                  ToolTrace / FeedbackBar / DeviceTab / EntriesTab /
 │  │                  UsersTab / PermissionMatrixTab / UserMenu …
+│  │                  LlmProvidersTab / EmbeddingProvidersTab /
+│  │                  RerankProvidersTab（模型供应商配置子页）
 │  ├─ views/          Chat / Knowledge / Entry / Trace / Suggestion / Dashboard /
-│  │                  WorkOrder / BaseData / Vector / QueryLog / Login
+│  │                  WorkOrder / BaseData / Vector / QueryLog / Login /
+│  │                  LlmConfig / TermDict
 │  ├─ router/index.ts
 │  ├─ App.vue / main.ts / style.css
 ├─ public/
@@ -77,6 +82,12 @@ CNC_Web_Agent/
 ├─ package.json
 └─ tsconfig*.json
 ```
+
+## 🧩 管理与配置
+
+- **模型 / 服务配置（`/admin/llm-config`）** — 三个 Tab 分别管理 chat / embedding / rerank 三类供应商。列表里可「测试」连通性、`主用切换`后立即生效（后端 Invalidate 缓存，无须重启前端或后端进程）。embedding 切换维度需要离线迁移（DB 列固定 1024）。
+- **术语词典（`/admin/term-dict`）** — 工业术语 CRUD + 从查询日志 / 报警码自动挖掘候选词（`/api/term-mine/*`）。保存后调用后端 `tokenize.Reload()` 热生效，影响 SimpleTokenizer 整词保留策略。
+- **Trace / 日志中的模型溯源** — TraceView 时间轴与 QueryLogView 列表会展示本次实际调用的 `chat / embed / rerank` 供应商与模型名，便于排查"模型换了效果变差"这类问题。
 
 ## 界面截图
 
@@ -105,6 +116,12 @@ CNC_Web_Agent/
 
 #### 向量看板
 ![向量看板](assets/screenshots/vectors.png)
+
+#### 模型 / 服务配置
+![模型配置](assets/screenshots/llm-config.png)
+
+#### 工业术语词典
+![术语词典](assets/screenshots/term-dict.png)
 
 ## 数据与免责声明
 
