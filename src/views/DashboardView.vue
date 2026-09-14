@@ -22,8 +22,11 @@ import type { TopFaultsResponse } from '@/types'
 
 const router = useRouter()
 
+type WindowMode = 'preset' | 'custom'
+const mode = ref<WindowMode>('preset')
 const days = ref<number>(30)
 const topN = ref<number>(20)
+const customRange = ref<[string, string] | null>(null)
 const loading = ref(false)
 const data = ref<TopFaultsResponse | null>(null)
 
@@ -33,12 +36,32 @@ const presets = [
   { label: '近 90 天', value: 90 },
 ]
 
+// days 模式下，前端按当前时刻倒退算窗口，给「查看工单」/条形图链接用，
+// 避免后端只回 days 不回 from_time 导致跳转丢参数。
+function presetWindow(): { from_time: string; to_time: string } {
+  const to = new Date()
+  const from = new Date(to.getTime() - days.value * 86400_000)
+  return {
+    from_time: from.toISOString().slice(0, 19),
+    to_time: to.toISOString().slice(0, 19),
+  }
+}
+
 async function fetchData() {
   loading.value = true
   try {
-    const resp = await http.get<TopFaultsResponse>('/stats/top-faults', {
-      params: { days: days.value, top_n: topN.value },
-    })
+    let params: Record<string, string | number>
+    if (mode.value === 'custom' && customRange.value) {
+      params = {
+        from_time: customRange.value[0],
+        to_time: customRange.value[1],
+        top_n: topN.value,
+      }
+    } else {
+      const w = presetWindow()
+      params = { from_time: w.from_time, to_time: w.to_time, top_n: topN.value }
+    }
+    const resp = await http.get<TopFaultsResponse>('/stats/top-faults', { params })
     data.value = resp.data
   } catch (e) {
     ElMessage.error(errMessage(e))
@@ -46,6 +69,21 @@ async function fetchData() {
   } finally {
     loading.value = false
   }
+}
+
+function onModeChange(m: WindowMode | string | number | boolean | undefined) {
+  if (m === 'custom') {
+    // 进入自定义模式时给个默认 30 天范围，避免空值
+    if (!customRange.value) {
+      const to = new Date()
+      const from = new Date(to.getTime() - 30 * 86400_000)
+      customRange.value = [
+        from.toISOString().slice(0, 19),
+        to.toISOString().slice(0, 19),
+      ]
+    }
+  }
+  fetchData()
 }
 
 onMounted(fetchData)
@@ -57,6 +95,10 @@ const queryMax = computed(() =>
 const maintMax = computed(() =>
   data.value?.by_maintenance.reduce((m, it) => Math.max(m, it.count), 0) ?? 0,
 )
+const termMax = computed(() =>
+  data.value?.by_query_terms?.reduce((m, it) => Math.max(m, it.count), 0) ?? 0,
+)
+const queryTerms = computed(() => data.value?.by_query_terms ?? [])
 
 const severityTag = (sev?: string | null) => {
   const s = sev || 'unknown'
@@ -92,19 +134,28 @@ function fmtDate(s?: string | null): string {
 const windowLabel = computed(() => {
   if (!data.value) return '—'
   const w = data.value.window
-  if (w.days) return `近 ${w.days} 天`
-  if (w.from_time) {
-    return `${fmtDate(w.from_time)} ~ ${fmtDate(w.to_time)}`
-  }
+  if (w.days && !w.from_time) return `近 ${w.days} 天`
+  if (w.from_time) return `${fmtDate(w.from_time)} ~ ${fmtDate(w.to_time)}`
   return `截至 ${fmtDate(w.to_time)}`
 })
 
+// 统一从当前 data.window 算跳转参数；后端即使在 days 模式也回 from/to
+function windowQuery(): { from_time: string; to_time: string } | null {
+  const w = data.value?.window
+  if (w?.from_time && w?.to_time) {
+    return { from_time: w.from_time, to_time: w.to_time }
+  }
+  return null
+}
+
 // 头部「查看工单」：带当前窗口 from/to，跳过去与「窗口内维修工单」口径一致
 function goWorkorders() {
-  const w = data.value?.window
+  const w = windowQuery()
   const p = new URLSearchParams()
-  if (w?.from_time) p.set('from_time', w.from_time)
-  if (w?.to_time) p.set('to_time', w.to_time)
+  if (w) {
+    p.set('from_time', w.from_time)
+    p.set('to_time', w.to_time)
+  }
   const qs = p.toString()
   router.push(qs ? `/workorders?${qs}` : '/workorders')
 }
@@ -124,11 +175,26 @@ function goWorkorders() {
     <el-card class="filter-bar" shadow="never">
       <el-form inline>
         <el-form-item label="时间窗口">
-          <el-radio-group v-model="days" @change="fetchData">
+          <el-radio-group v-model="mode" @change="onModeChange">
+            <el-radio-button value="preset">预设</el-radio-button>
+            <el-radio-button value="custom">自定义</el-radio-button>
+          </el-radio-group>
+          <el-radio-group v-if="mode === 'preset'" v-model="days" @change="fetchData" style="margin-left: 8px">
             <el-radio-button v-for="p in presets" :key="p.value" :value="p.value">
               {{ p.label }}
             </el-radio-button>
           </el-radio-group>
+          <el-date-picker
+            v-if="mode === 'custom'"
+            v-model="customRange"
+            type="datetimerange"
+            range-separator="~"
+            start-placeholder="起"
+            end-placeholder="止"
+            style="margin-left: 8px; width: 360px"
+            value-format="YYYY-MM-DDTHH:mm:ss"
+            @change="fetchData"
+          />
         </el-form-item>
         <el-form-item label="TopN">
           <el-select v-model="topN" style="width: 100px" @change="fetchData">
@@ -185,19 +251,21 @@ function goWorkorders() {
     </div>
 
     <!-- 双源柱状图 -->
-    <div v-if="data" class="charts">
+    <div v-if="data" class="charts charts-3">
       <el-card shadow="never">
         <template #header>
           <span class="chart-title">📊 查询侧 TopN（{{ data.by_query.length }} 条）</span>
         </template>
         <div v-if="data.by_query.length === 0" class="empty-state">
-          窗口内无查询日志
+          窗口内查询日志无报警码命中（试试用含报警码的问句，或切换时间窗口）
         </div>
         <div v-else class="bar-chart">
           <div v-for="(it, idx) in data.by_query" :key="`q-${it.code_norm}`" class="bar-row">
             <span class="bar-rank">#{{ idx + 1 }}</span>
             <span class="bar-code">{{ it.code_norm }}</span>
-            <span class="bar-name">{{ it.name || '—' }}</span>
+            <el-tooltip :content="it.name || '—'" placement="top" :disabled="!it.name">
+              <span class="bar-name">{{ it.name || '—' }}</span>
+            </el-tooltip>
             <div class="bar-track">
               <div
                 class="bar-fill bar-fill-query"
@@ -226,14 +294,11 @@ function goWorkorders() {
           <div v-for="(it, idx) in data.by_maintenance" :key="`m-${it.code_norm}`" class="bar-row">
             <span class="bar-rank">#{{ idx + 1 }}</span>
             <span class="bar-code">{{ it.code_norm }}</span>
-            <span class="bar-name">{{ it.name || '—' }}</span>
-            <RouterLink
-              :to="`/workorders?alarm_code=${it.code_norm}${data.window.from_time ? `&from_time=${encodeURIComponent(data.window.from_time)}&to_time=${encodeURIComponent(data.window.to_time)}` : ''}`"
-              class="bar-link"
-              :title="data.window.from_time ? `窗口 ${data.window.from_time} ~ ${data.window.to_time}` : '全部历史'"
-            >
-              {{ it.count }} 单 →
-            </RouterLink>
+            <el-tooltip :content="it.name || '—'" placement="top" :disabled="!it.name">
+              <span class="bar-name">{{ it.name || '—' }}</span>
+            </el-tooltip>
+            <span v-if="windowQuery()" class="bar-link bar-link-static">{{ it.count }} 单</span>
+            <span v-else class="bar-link bar-link-static">{{ it.count }} 单</span>
             <div class="bar-track">
               <div
                 class="bar-fill bar-fill-maint"
@@ -244,6 +309,49 @@ function goWorkorders() {
             </div>
           </div>
         </div>
+      </el-card>
+
+      <el-card shadow="never">
+        <template #header>
+          <span class="chart-title">💬 查询主题 TopN（{{ queryTerms.length }} 条）</span>
+        </template>
+        <div v-if="queryTerms.length === 0" class="empty-state">
+          窗口内查询日志不足（少于 {{ 2 }} 次共现问句）
+        </div>
+        <div v-else class="bar-chart">
+          <div v-for="(it, idx) in queryTerms" :key="`t-${it.term}`" class="bar-row bar-row-term">
+            <span class="bar-rank">#{{ idx + 1 }}</span>
+            <span class="bar-code bar-code-term">{{ it.term }}</span>
+            <span class="bar-name">覆盖 {{ it.doc_count }} 条</span>
+            <div class="bar-track">
+              <div
+                class="bar-fill bar-fill-term"
+                :style="{ width: termMax > 0 ? (it.count / termMax * 100) + '%' : '0%' }"
+              >
+                {{ it.count }}
+              </div>
+            </div>
+          </div>
+        </div>
+      </el-card>
+    </div>
+
+    <!-- 详细表格 -->
+    <div v-if="data && queryTerms.length > 0" class="detail-tables">
+      <el-card shadow="never" style="margin-top: 16px">
+        <template #header>
+          <span class="chart-title">📋 查询主题明细</span>
+        </template>
+        <el-table :data="queryTerms" stripe size="small">
+          <el-table-column prop="term" label="主题词" width="200" />
+          <el-table-column prop="count" label="出现次数" width="120" sortable />
+          <el-table-column prop="doc_count" label="覆盖问句" width="120" sortable />
+          <el-table-column label="覆盖比例">
+            <template #default="{ row }">
+              {{ data.total_query_logs > 0 ? Math.round(row.doc_count / data.total_query_logs * 100) + '%' : '—' }}
+            </template>
+          </el-table-column>
+        </el-table>
       </el-card>
     </div>
 
@@ -370,8 +478,15 @@ function goWorkorders() {
   gap: 16px;
   margin-bottom: 16px;
 }
+.charts-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+@media (max-width: 1400px) {
+  .charts-3 { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 1000px) {
   .charts { grid-template-columns: 1fr; }
+  .charts-3 { grid-template-columns: 1fr; }
 }
 .chart-title {
   font-weight: 600;
@@ -384,11 +499,37 @@ function goWorkorders() {
   overflow-y: auto;
 }
 .bar-row {
-  display: grid;
-  grid-template-columns: 36px 80px 1fr 200px;
+  display: grid !important;
+  grid-template-columns: 32px 80px minmax(0, 100px) 48px minmax(160px, 1fr) !important;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 13px;
+  min-width: 0;
+}
+.bar-row-term {
+  grid-template-columns: 32px 80px minmax(0, 120px) minmax(160px, 1fr) !important;
+}
+.bar-track {
+  min-width: 160px;
+  height: 22px;
+  background: #f5f7fa;
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+.bar-link {
+  color: #409eff;
+  font-size: 12px;
+  text-align: right;
+  font-family: monospace;
+  white-space: nowrap;
+}
+.bar-link:hover {
+  text-decoration: underline;
+}
+.bar-link-static {
+  color: #909399;
+  cursor: default;
 }
 .bar-rank {
   color: #999;
@@ -405,13 +546,7 @@ function goWorkorders() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.bar-track {
-  height: 22px;
-  background: #f5f7fa;
-  border-radius: 4px;
-  position: relative;
-  overflow: hidden;
+  min-width: 0;
 }
 .bar-fill {
   height: 100%;
@@ -431,6 +566,14 @@ function goWorkorders() {
 }
 .bar-fill-maint {
   background: linear-gradient(90deg, #e6a23c, #ebb563);
+}
+.bar-fill-term {
+  background: linear-gradient(90deg, #67c23a, #85ce61);
+}
+.bar-code-term {
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-weight: 600;
+  color: #409eff;
 }
 .empty-state {
   text-align: center;

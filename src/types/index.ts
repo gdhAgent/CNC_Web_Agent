@@ -322,12 +322,19 @@ export interface TopFaultsWindow {
   days?: number | null
 }
 
+export interface TopQueryTerm {
+  term: string
+  count: number
+  doc_count: number
+}
+
 export interface TopFaultsResponse {
   window: TopFaultsWindow
   total_query_logs: number
   total_maintenance_logs: number
   by_query: TopFaultItem[]
   by_maintenance: TopFaultItem[]
+  by_query_terms?: TopQueryTerm[]
 }
 
 // ==================== 工单管理 ====================
